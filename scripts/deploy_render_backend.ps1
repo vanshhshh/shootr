@@ -36,9 +36,9 @@ $requiredEnv = @(
   "FIREBASE_SERVICE_ACCOUNT_JSON"
 )
 
-foreach ($name in $requiredEnv) {
-  if (-not [Environment]::GetEnvironmentVariable($name)) {
-    throw "Set $name before running this script."
+foreach ($envName in $requiredEnv) {
+  if (-not [Environment]::GetEnvironmentVariable($envName)) {
+    throw "Set $envName before running this script."
   }
 }
 
