@@ -1,0 +1,17 @@
+{
+  "name": "shootr-backend-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed:firestore": "node scripts/seed_firestore.mjs",
+    "admin:set": "node scripts/set_admin_role.mjs",
+    "test:rules": "firebase emulators:exec --only firestore \"node test/firestore_rules.test.mjs\""
+  },
+  "dependencies": {
+    "firebase-admin": "^13.6.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.10.0"
+  }
+}

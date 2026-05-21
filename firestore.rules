@@ -1,0 +1,273 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function userExists(uid) {
+      return exists(userPath(uid));
+    }
+
+    function roleFor(uid) {
+      return userExists(uid) ? get(userPath(uid)).data.role : null;
+    }
+
+    function role() {
+      return signedIn() ? roleFor(request.auth.uid) : null;
+    }
+
+    function isBootstrapAdminEmail() {
+      return signedIn() &&
+        request.auth.token.keys().hasAny(['email']) &&
+        request.auth.token.email == 'vansh.sharma.cse@gmail.com';
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        role() == 'admin' ||
+        isBootstrapAdminEmail()
+      );
+    }
+
+    function isActiveShootr() {
+      return signedIn() &&
+        role() == 'shootr' &&
+        userExists(request.auth.uid) &&
+        get(userPath(request.auth.uid)).data.accountStatus == 'active';
+    }
+
+    function requestedRole() {
+      return request.resource.data.role;
+    }
+
+    function isClientOrShootrRole() {
+      return requestedRole() in ['client', 'shootr'];
+    }
+
+    function validSelfCreatedStatus() {
+      return (
+        requestedRole() == 'client' &&
+        request.resource.data.accountStatus == 'active'
+      ) || (
+        requestedRole() == 'shootr' &&
+        request.resource.data.accountStatus == 'pendingReview'
+      );
+    }
+
+    function safeSelfCreatedProfile() {
+      return isClientOrShootrRole() &&
+        validSelfCreatedStatus() &&
+        request.resource.data.verified != true &&
+        request.resource.data.backgroundVerified != true &&
+        request.resource.data.identityStatus != 'verified' &&
+        request.resource.data.deviceVerificationStatus != 'verified';
+    }
+
+    function safeSelfProfileUpdate() {
+      return request.resource.data.role == resource.data.role &&
+        request.resource.data.accountStatus == resource.data.accountStatus &&
+        request.resource.data.verified == resource.data.verified &&
+        request.resource.data.backgroundVerified == resource.data.backgroundVerified &&
+        request.resource.data.identityStatus == resource.data.identityStatus &&
+        request.resource.data.deviceVerificationStatus == resource.data.deviceVerificationStatus &&
+        request.resource.data.totalEarned == resource.data.totalEarned;
+    }
+
+    function isReadableShootrProfile() {
+      return resource.data.role == 'shootr' &&
+        resource.data.accountStatus == 'active';
+    }
+
+    function bookingPath(bookingId) {
+      return /databases/$(database)/documents/bookings/$(bookingId);
+    }
+
+    function bookingExists(bookingId) {
+      return exists(bookingPath(bookingId));
+    }
+
+    function bookingParticipant(bookingId) {
+      return bookingExists(bookingId) && (
+        get(bookingPath(bookingId)).data.clientId == request.auth.uid ||
+        get(bookingPath(bookingId)).data.shootrId == request.auth.uid
+      );
+    }
+
+    function isOpenBookingRequest() {
+      return resource.data.status == 'pending' &&
+        resource.data.shootrId == '';
+    }
+
+    function canReadBooking() {
+      return signedIn() && (
+        resource.data.clientId == request.auth.uid ||
+        resource.data.shootrId == request.auth.uid ||
+        isAdmin() ||
+        (
+          isActiveShootr() &&
+          isOpenBookingRequest()
+        )
+      );
+    }
+
+    function validClientBookingCreate() {
+      return signedIn() &&
+        request.resource.data.clientId == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.shootrId == '' &&
+        request.resource.data.shootrName == '' &&
+        request.resource.data.paymentStatus in ['pending', 'cashAtShoot'];
+    }
+
+    function clientCanCancelBooking() {
+      return signedIn() &&
+        resource.data.clientId == request.auth.uid &&
+        request.resource.data.clientId == resource.data.clientId &&
+        request.resource.data.shootrId == resource.data.shootrId &&
+        request.resource.data.shootrName == resource.data.shootrName &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'updatedAt'
+        ]) &&
+        request.resource.data.status == 'cancelled' &&
+        resource.data.status in ['pending', 'confirmed'];
+    }
+
+    function shootrCanClaimBooking() {
+      return isActiveShootr() &&
+        resource.data.status == 'pending' &&
+        resource.data.shootrId == '' &&
+        request.resource.data.shootrId == request.auth.uid &&
+        request.resource.data.shootrName is string &&
+        request.resource.data.shootrName.size() > 0 &&
+        request.resource.data.status == 'confirmed' &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'shootrId',
+          'shootrName',
+          'etaMinutes',
+          'liveLatitude',
+          'liveLongitude',
+          'updatedAt'
+        ]);
+    }
+
+    function shootrCanProgressBooking() {
+      return isActiveShootr() &&
+        resource.data.shootrId == request.auth.uid &&
+        request.resource.data.shootrId == resource.data.shootrId &&
+        request.resource.data.clientId == resource.data.clientId &&
+        request.resource.data.paymentStatus == resource.data.paymentStatus &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'updatedAt'
+        ]) &&
+        request.resource.data.status in [
+          'active',
+          'editing',
+          'completed',
+          'delivered',
+          'cancelled'
+        ];
+    }
+
+    match /users/{userId} {
+      allow create: if signedIn() && (
+        isAdmin() ||
+        (
+          request.auth.uid == userId &&
+          safeSelfCreatedProfile()
+        )
+      );
+      allow read: if signedIn() && (
+        request.auth.uid == userId ||
+        isAdmin() ||
+        isReadableShootrProfile()
+      );
+      allow update: if signedIn() && (
+        isAdmin() ||
+        (
+          request.auth.uid == userId &&
+          safeSelfProfileUpdate()
+        )
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /packages/{packageId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow create: if validClientBookingCreate() || isAdmin();
+      allow read: if canReadBooking();
+      allow update: if isAdmin() ||
+        clientCanCancelBooking() ||
+        shootrCanClaimBooking() ||
+        shootrCanProgressBooking();
+      allow delete: if isAdmin();
+    }
+
+    match /chat_threads/{bookingId} {
+      allow read, create, update: if signedIn() && (bookingParticipant(bookingId) || isAdmin());
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read, create: if signedIn() && (bookingParticipant(bookingId) || isAdmin());
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    match /notifications/{notificationId} {
+      function notificationTargetMatches() {
+        return resource.data.targetUserId == request.auth.uid ||
+          (
+            resource.data.targetRole is string &&
+            resource.data.targetRole == role()
+          );
+      }
+
+      allow create: if isAdmin();
+      allow read: if signedIn() && (isAdmin() || notificationTargetMatches());
+      allow update: if signedIn() && (
+        isAdmin() ||
+        (
+          notificationTargetMatches() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        )
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /payment_orders/{orderId} {
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if signedIn() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    match /razorpay_webhook_events/{eventId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /admin_overview/{docId} {
+      allow read: if signedIn() && isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1039072577992",
+    "project_id": "shootr-app",
+    "storage_bucket": "shootr-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1039072577992:android:19e33b5a0b5055330b98fd",
+        "android_client_info": {
+          "package_name": "com.shootr.app.shootr"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAmymfVjFo1QegWc0g9AtoIlTKXx3OfXjM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
