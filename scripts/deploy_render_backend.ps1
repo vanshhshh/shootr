@@ -71,12 +71,6 @@ $body = @{
       buildCommand = "npm ci"
       startCommand = "npm start"
     }
-    ipAllowList        = @(
-      @{
-        cidrBlock   = "0.0.0.0/0"
-        description = "everywhere"
-      }
-    )
   }
 } | ConvertTo-Json -Depth 20
 
