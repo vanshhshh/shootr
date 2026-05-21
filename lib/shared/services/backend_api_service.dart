@@ -9,7 +9,11 @@ class BackendApiService {
     : _auth = auth ?? FirebaseAuth.instance,
       _client = client ?? http.Client(),
       _baseUrl =
-          baseUrl ?? const String.fromEnvironment('SHOOTR_BACKEND_URL').trim();
+          baseUrl ??
+          const String.fromEnvironment(
+            'SHOOTR_BACKEND_URL',
+            defaultValue: 'https://firebase-service-account-json.onrender.com',
+          ).trim();
 
   final FirebaseAuth _auth;
   final http.Client _client;
